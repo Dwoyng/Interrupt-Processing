@@ -10,6 +10,9 @@ typedef void (*date_time_event)();
 // Khai báo chân cảm biến hồng ngoại IR
 const int irPin = 13; // Cảm biến hồng ngoại kết nối với GPIO 13
 
+// Biến để theo dõi trạng thái có ngắt từ IR
+volatile bool objectDetected = false;
+
 class BaseDateTime {
 protected:
     int vals[3];
@@ -106,6 +109,7 @@ void ShowDate(const Date& a) {
     lcd.print("/");
     lcd.print(a.Year());
 }
+
 void ShowTime(const Time& b) {
     lcd.setCursor(0, 1);  // Đặt con trỏ tại dòng thứ hai
     lcd.print(FormatWithLeadingZero(b.Hour()));
@@ -114,9 +118,16 @@ void ShowTime(const Time& b) {
     lcd.print(":");
     lcd.print(FormatWithLeadingZero(b.Second()));
 }
+
 void EndDay() {
     ShowDate(++a); // Nhảy sang ngày mới và hiển thị
 }
+
+// ISR để xử lý ngắt khi có tín hiệu từ cảm biến IR
+void IR_ISR() {
+    objectDetected = digitalRead(irPin) == LOW; // Nếu IR phát hiện vật cản (LOW), set objectDetected = true
+}
+
 void setup() {
     lcd.init();
     lcd.backlight();
@@ -127,12 +138,13 @@ void setup() {
     // Thiết lập sự kiện cho đồng hồ
     b.on_limit = EndDay; // Gán hàm EndDay vào sự kiện on_limit
 
-    pinMode(irPin, INPUT); // Cấu hình chân cảm biến IR là INPUT
+    // Cấu hình ngắt ngoài cho cảm biến IR (GPIO 13), sử dụng ngắt khi thay đổi tín hiệu (CHANGE)
+    pinMode(irPin, INPUT);
+    attachInterrupt(digitalPinToInterrupt(irPin), IR_ISR, CHANGE);
 }
+
 void loop() {
-    // Kiểm tra tín hiệu từ cảm biến IR
-    int irState = digitalRead(irPin);
-    if (irState == LOW) { // Nếu phát hiện vật cản (LOW là không có phản hồi từ IR)
+    if (objectDetected) { // Nếu phát hiện vật cản
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("Detecting Object");
@@ -140,7 +152,7 @@ void loop() {
         lcd.clear();  // Xóa màn hình để cập nhật lại
         ShowDate(a);  // Hiển thị ngày
         ShowTime(++b);  // Cập nhật thời gian (tăng giây)
-        delay(1000);
     }
+    
     delay(1000);  // Đợi 1 giây trước khi cập nhật lại
 }
